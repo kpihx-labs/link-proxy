@@ -1,0 +1,22 @@
+# Runtime
+node_modules/
+bun.lock
+
+# Env
+.env
+!/.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+*.tgz

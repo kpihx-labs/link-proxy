@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>link-proxy — Review ({{ACTION}})</title>
+  <style>{{CSS_STYLES}}</style>
+</head>
+<body>
+<script type="application/json" id="payload-data">{{PAYLOAD_JSON}}</script>
+
+<header class="hitl-header">
+  <div>
+    <h1 class="hitl-brand">💼 link-proxy · Post Review</h1>
+    <p class="hitl-subtitle">{{ACTION}} — édite en plein écran, approve pour publier</p>
+    <div id="action-badge">
+      <span class="status-badge">⚡ {{ACTION}}</span>
+      <span class="status-badge" id="vis-badge" style="margin-left:8px">🌐 …</span>
+      <span class="char-counter" id="char-counter-head" style="margin-left:8px">0 / 3000</span>
+    </div>
+  </div>
+  <div class="hitl-actions">
+    <button class="hitl-button hitl-reject" onclick="submitForm('rejected')">✕ Reject</button>
+    <button class="hitl-button hitl-approve" onclick="submitForm('approved')">✓ Approve &amp; Publish</button>
+  </div>
+</header>
+
+<main class="hitl-container">
+  <!-- ===== 1. Full-space editor ===== -->
+  <section class="hitl-card">
+    <h2>✏️ Éditeur <span class="field-label">tout l'espace, édition ligne par ligne</span></h2>
+    <div class="hitl-card-body">
+      <div class="editor-row" id="ed-text-row">
+        <label class="editor-label" for="ed-text">Texte du post</label>
+        <div class="editor-toolbar" id="toolbar">
+          <button class="tb-btn" onclick="fmtBold()" title="Gras unicode"><b>B</b></button>
+          <button class="tb-btn" onclick="fmtItalic()" title="Italique unicode"><i>I</i></button>
+          <button class="tb-btn" onclick="insAtCursor('\n• ')" title="Puce">•</button>
+          <button class="tb-btn" onclick="insAtCursor('\n𝟏. ')" title="Liste numérotée">1.</button>
+          <button class="tb-btn" onclick="insAtCursor('\n\n━━━━━━━━━━\n\n')" title="Séparateur">━</button>
+          <button class="tb-btn" onclick="insAtCursor('#')" title="Hashtag">#</button>
+          <span class="char-counter" id="char-counter">0 / 3000</span>
+        </div>
+        <textarea class="editor-textarea editor-big" id="ed-text" placeholder="Écris ton post ici…"></textarea>
+      </div>
+
+      <div class="editor-row" id="ed-vis-row">
+        <label class="editor-label" for="ed-visibility">Visibilité 🔒</label>
+        <select class="editor-input" id="ed-visibility">
+          <option value="PUBLIC">🌐 PUBLIC — tout LinkedIn</option>
+          <option value="CONNECTIONS">🔒 CONNECTIONS — réseau uniquement (max privé API)</option>
+        </select>
+      </div>
+
+      <div id="ed-article-rows">
+        <div class="editor-row" id="ed-url-row">
+          <label class="editor-label" for="ed-url">URL carte article (vide = pas de carte)</label>
+          <input class="editor-input" id="ed-url" type="text" placeholder="https://…">
+        </div>
+        <div class="editor-row" id="ed-title-row">
+          <label class="editor-label" for="ed-title">Titre carte</label>
+          <input class="editor-input" id="ed-title" type="text">
+        </div>
+        <div class="editor-row" id="ed-desc-row">
+          <label class="editor-label" for="ed-description">Description carte</label>
+          <textarea class="editor-textarea" id="ed-description" rows="2"></textarea>
+        </div>
+      </div>
+
+      <div class="editor-row" id="ed-media-block">
+        <label class="editor-label">Médias (carrousel — images/vidéos locales ou URL http)</label>
+        <div id="media-list"></div>
+        <button class="tb-btn" onclick="addMediaRow()" style="margin-top:8px">＋ Ajouter un média</button>
+      </div>
+
+      <div id="ed-extra"></div>
+    </div>
+  </section>
+
+  <!-- ===== 2. Live LinkedIn preview ===== -->
+  <section class="hitl-card">
+    <h2>👁️ Aperçu <span class="field-label">rendu proche du fil LinkedIn</span></h2>
+    <div class="hitl-card-body">
+      <div class="preview-post">
+        <div class="preview-head">👤 Toi <span id="pv-vis">· 🌐</span></div>
+        <div class="preview-text" id="pv-text"></div>
+        <div class="preview-media" id="pv-media"></div>
+        <div class="preview-card" id="pv-card" style="display:none"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 3. Raw JSON (always visible, two-way sync) ===== -->
+  <section class="hitl-card">
+    <h2>🔧 Raw JSON <span class="field-label">synchro bidirectionnelle avec l'éditeur</span></h2>
+    <div class="hitl-card-body">
+      <textarea class="hitl-input hitl-mono" id="raw-json-payload" rows="14" spellcheck="false"></textarea>
+    </div>
+  </section>
+</main>
+
+<footer class="hitl-footer">
+  <textarea class="hitl-input" id="comment" placeholder="Commentaire reviewer (optionnel, loggé dans l'autosave)" rows="2" style="flex:1"></textarea>
+  <button class="hitl-button hitl-reject" onclick="submitForm('rejected')">✕ Reject</button>
+  <button class="hitl-button hitl-approve" onclick="submitForm('approved')">✓ Approve &amp; Publish</button>
+</footer>
+
+<script>
+var ORIGINAL = null;
+var payload = {};
+var lockedFields = {{LOCKED_FIELDS_JSON}};
+var LINKEDIN_LIMIT = 3000;
+var rawEl = null;
+var suppressRaw = false;
+
+try {
+  payload = JSON.parse(document.getElementById('payload-data').textContent);
+  ORIGINAL = JSON.parse(JSON.stringify(payload));
+} catch(e) { payload = {}; ORIGINAL = {}; }
+
+var KNOWN = ['text', 'visibility', 'url', 'title', 'description', 'media', 'image', 'alt_text'];
+rawEl = document.getElementById('raw-json-payload');
+
+// ---------- unicode bold / italic ----------
+var BOLD_UP = '𝐀𝐁𝐂𝐃𝐄𝐅𝐆𝐇𝐈𝐉𝐊𝐋𝐌𝐍𝐎𝐏𝐐𝐑𝐒𝐓𝐔𝐕𝐖𝐗𝐘𝐙';
+var BOLD_LO = '𝐚𝐛𝐜𝐝𝐞𝐟𝐠𝐡𝐢𝐣𝐤𝐥𝐦𝐧𝐨𝐩𝐪𝐫𝐬𝐭𝐮𝐯𝐰𝐱𝐲𝐳';
+var BOLD_DI = '𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗';
+var IT_UP = '𝐴𝐵𝐶𝐷𝐸𝐹𝐺𝐻𝐼𝐽𝐾𝐿𝑀𝑁𝑂𝑃𝑄𝑅𝑆𝑇𝑈𝑉𝑊𝑋𝑌𝑍';
+var IT_LO = '𝑎𝑏𝑐𝑑𝑒𝑓𝑔ℎ𝑖𝑗𝑘𝑙𝑚𝑛𝑜𝑝𝑞𝑟𝑠𝑡𝑢𝑣𝑤𝑥𝑦𝑧';
+function mapStr(s, up, lo, di) {
+  return s.split('').map(function(ch) {
+    var c = ch.charCodeAt(0);
+    if (c >= 65 && c <= 90) return up[c - 65];
+    if (c >= 97 && c <= 122) return lo[c - 97];
+    if (di && c >= 48 && c <= 57) return di[c - 48];
+    return ch;
+  }).join('');
+}
+function fmtBold() { wrapSel(function(s){ return mapStr(s, BOLD_UP, BOLD_LO, BOLD_DI); }); }
+function fmtItalic() { wrapSel(function(s){ return mapStr(s, IT_UP, IT_LO, null); }); }
+function wrapSel(fn) {
+  var t = document.getElementById('ed-text');
+  var s = t.selectionStart, e = t.selectionEnd;
+  var sel = t.value.substring(s, e) || 'texte';
+  t.value = t.value.substring(0, s) + fn(sel) + t.value.substring(e);
+  t.focus(); sync();
+}
+function insAtCursor(txt) {
+  var t = document.getElementById('ed-text');
+  var p = t.selectionStart;
+  t.value = t.value.substring(0, p) + txt + t.value.substring(p);
+  t.focus(); t.setSelectionRange(p + txt.length, p + txt.length); sync();
+}
+
+// ---------- init editor from payload ----------
+document.getElementById('ed-text').value = payload.text || '';
+var vis = document.getElementById('ed-visibility');
+if (payload.visibility) vis.value = payload.visibility;
+document.getElementById('ed-url').value = payload.url || '';
+document.getElementById('ed-title').value = payload.title || '';
+document.getElementById('ed-description').value = payload.description || '';
+
+// single-image action (post-create-image): show image/alt in article rows
+if (payload.image && !document.getElementById('ed-image-row')) {
+  var imgRow = document.createElement('div');
+  imgRow.className = 'editor-row'; imgRow.id = 'ed-image-row';
+  imgRow.innerHTML = '<label class="editor-label" for="ed-image">Image (chemin local ou URL http)</label>';
+  var imgIn = document.createElement('input');
+  imgIn.className = 'editor-input'; imgIn.id = 'ed-image'; imgIn.type = 'text';
+  imgIn.value = payload.image || '';
+  imgIn.addEventListener('input', sync);
+  imgRow.appendChild(imgIn);
+  var altRow = document.createElement('div');
+  altRow.className = 'editor-row';
+  altRow.innerHTML = '<label class="editor-label" for="ed-alt">Alt text (accessibilité)</label>';
+  var altIn = document.createElement('input');
+  altIn.className = 'editor-input'; altIn.id = 'ed-alt'; altIn.type = 'text';
+  altIn.value = payload.alt_text || '';
+  altIn.addEventListener('input', sync);
+  imgRow.appendChild(altRow);
+  document.getElementById('ed-article-rows').prepend(imgRow);
+}
+
+// ---------- media rows (post-create-full) ----------
+function addMediaRow(item) {
+  item = item || { type: 'image', path: '', alt_text: '', title: '' };
+  var list = document.getElementById('media-list');
+  var row = document.createElement('div');
+  row.className = 'media-row';
+  row.innerHTML =
+    '<select class="editor-input m-type"><option value="image">🖼 image</option><option value="video">🎬 video</option></select>' +
+    '<input class="editor-input m-path" type="text" placeholder="/chemin/local.png ou https://…" value="' + escapeAttr(item.path || '') + '">' +
+    '<input class="editor-input m-alt" type="text" placeholder="alt text" value="' + escapeAttr(item.alt_text || '') + '">' +
+    '<input class="editor-input m-title" type="text" placeholder="titre" value="' + escapeAttr(item.title || '') + '">' +
+    '<button class="tb-btn m-del" title="Retirer">✕</button>' +
+    '<div class="m-preview"></div>';
+  row.querySelector('.m-type').value = item.type || 'image';
+  row.querySelector('.m-del').onclick = function(){ row.remove(); sync(); };
+  row.querySelectorAll('input,select').forEach(function(el){ el.addEventListener('input', sync); });
+  list.appendChild(row);
+  sync();
+}
+function escapeAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+(Array.isArray(payload.media) ? payload.media : []).forEach(addMediaRow);
+
+// ---------- unknown extra fields ----------
+var extra = document.getElementById('ed-extra');
+Object.keys(payload).forEach(function(key) {
+  if (KNOWN.indexOf(key) !== -1) return;
+  if (lockedFields.indexOf(key) !== -1) return;
+  var r = document.createElement('div');
+  r.className = 'editor-row';
+  var lb = document.createElement('label');
+  lb.className = 'editor-label';
+  lb.textContent = key + ' (champ supplémentaire)';
+  r.appendChild(lb);
+  var v = payload[key];
+  var el = document.createElement((typeof v === 'string' && v.length > 80) ? 'textarea' : 'input');
+  el.className = (el.tagName === 'TEXTAREA') ? 'editor-textarea' : 'editor-input';
+  el.id = 'ed-x-' + key;
+  if (el.tagName === 'TEXTAREA') el.rows = 3;
+  el.value = (typeof v === 'object') ? JSON.stringify(v, null, 2) : (v === null || v === undefined ? '' : String(v));
+  el.addEventListener('input', sync);
+  r.appendChild(el);
+  extra.appendChild(r);
+});
+
+// ---------- collect editor -> object ----------
+function collectEditor() {
+  var u = JSON.parse(JSON.stringify(ORIGINAL));
+  u.text = document.getElementById('ed-text').value;
+  u.visibility = document.getElementById('ed-visibility').value;
+  var urlEl = document.getElementById('ed-url');
+  if (urlEl && 'url' in ORIGINAL) u.url = urlEl.value;
+  var titleEl = document.getElementById('ed-title');
+  if (titleEl && 'title' in ORIGINAL) u.title = titleEl.value;
+  var descEl = document.getElementById('ed-description');
+  if (descEl && 'description' in ORIGINAL) u.description = descEl.value;
+  var imgEl = document.getElementById('ed-image');
+  if (imgEl && 'image' in ORIGINAL) u.image = imgEl.value;
+  var altEl = document.getElementById('ed-alt');
+  if (altEl && 'alt_text' in ORIGINAL) u.alt_text = altEl.value;
+  if (Array.isArray(ORIGINAL.media)) {
+    u.media = [];
+    document.querySelectorAll('#media-list .media-row').forEach(function(row) {
+      u.media.push({
+        type: row.querySelector('.m-type').value,
+        path: row.querySelector('.m-path').value,
+        alt_text: row.querySelector('.m-alt').value,
+        title: row.querySelector('.m-title').value
+      });
+    });
+  }
+  Object.keys(ORIGINAL).forEach(function(key) {
+    if (KNOWN.indexOf(key) !== -1) return;
+    var el = document.getElementById('ed-x-' + key);
+    if (el) {
+      var raw = el.value;
+      try { u[key] = JSON.parse(raw); } catch(e) { u[key] = raw; }
+    }
+  });
+  lockedFields.forEach(function(k) { if (ORIGINAL[k] !== undefined) u[k] = ORIGINAL[k]; });
+  return u;
+}
+
+// ---------- sync + preview ----------
+function sync() {
+  var u = collectEditor();
+  suppressRaw = true;
+  rawEl.value = JSON.stringify(u, null, 2);
+  suppressRaw = false;
+  renderPreview(u);
+}
+rawEl.addEventListener('input', function() {
+  if (suppressRaw) return;
+  try {
+    var p = JSON.parse(rawEl.value);
+    if (p.text !== undefined) document.getElementById('ed-text').value = p.text;
+    if (p.visibility) document.getElementById('ed-visibility').value = p.visibility;
+    if (p.url !== undefined) document.getElementById('ed-url').value = p.url;
+    if (p.title !== undefined) document.getElementById('ed-title').value = p.title;
+    if (p.description !== undefined) document.getElementById('ed-description').value = p.description;
+    renderPreview(p);
+  } catch(e) { /* JSON incomplet pendant la frappe — on attend */ }
+});
+document.getElementById('ed-text').addEventListener('input', sync);
+document.getElementById('ed-visibility').addEventListener('change', sync);
+['ed-url','ed-title','ed-description'].forEach(function(id){
+  document.getElementById(id).addEventListener('input', sync);
+});
+
+function renderPreview(u) {
+  var txt = u.text || '';
+  var n = txt.length;
+  var cc = document.getElementById('char-counter');
+  var cch = document.getElementById('char-counter-head');
+  cc.textContent = n + ' / ' + LINKEDIN_LIMIT;
+  cch.textContent = n + ' / ' + LINKEDIN_LIMIT;
+  var over = n > LINKEDIN_LIMIT;
+  cc.classList.toggle('over', over);
+  cch.classList.toggle('over', over);
+  var vb = document.getElementById('vis-badge');
+  vb.textContent = (u.visibility === 'CONNECTIONS') ? '🔒 CONNECTIONS' : '🌐 PUBLIC';
+  document.getElementById('pv-vis').textContent = (u.visibility === 'CONNECTIONS') ? '· 🔒 réseau' : '· 🌐 public';
+  document.getElementById('pv-text').textContent = txt || '(vide)';
+  var pm = document.getElementById('pv-media');
+  pm.innerHTML = '';
+  function addThumb(src, label) {
+    if (!src) return;
+    if (/^https?:\/\//i.test(src)) {
+      var img = document.createElement('img');
+      img.src = src; img.alt = label || '';
+      img.onerror = function(){ this.replaceWith(document.createTextNode('🖼 ' + src)); };
+      pm.appendChild(img);
+    } else {
+      var d = document.createElement('div');
+      d.className = 'pv-local';
+      d.textContent = '🖼 ' + src + (label ? ' — ' + label : '');
+      pm.appendChild(d);
+    }
+  }
+  if (u.image) addThumb(u.image, u.alt_text);
+  (Array.isArray(u.media) ? u.media : []).forEach(function(m){ addThumb(m.path, m.alt_text); });
+  var card = document.getElementById('pv-card');
+  if (u.url) {
+    card.style.display = '';
+    card.innerHTML = '<b>' + escapeHtml(u.title || u.url) + '</b><br><span>' +
+      escapeHtml(u.description || '') + '</span><br><a>' + escapeHtml(u.url) + '</a>';
+  } else { card.style.display = 'none'; card.innerHTML = ''; }
+}
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function submitForm(decision) {
+  var finalPayload;
+  try { finalPayload = JSON.parse(rawEl.value); }
+  catch(e) { finalPayload = collectEditor(); }
+  lockedFields.forEach(function(k) { if (ORIGINAL[k] !== undefined) finalPayload[k] = ORIGINAL[k]; });
+  var comment = document.getElementById('comment').value.trim();
+  var edited = JSON.stringify(finalPayload) !== JSON.stringify(ORIGINAL);
+  var res = await fetch('/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ decision: decision, comment: comment, payload: JSON.stringify(finalPayload) })
+  });
+  if (res.ok) {
+    document.body.innerHTML = '<div class="hitl-done"><h2>' +
+      (decision === 'approved' ? '✅ PUBLISHED' : '❌ REJECTED') +
+      '</h2><p>You can close this browser tab.</p></div>';
+    setTimeout(function() { window.close(); }, 1200);
+  }
+}
+
+sync();
+</script>
+</body>
+</html>

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>link-proxy — Review ({{ACTION}})</title>
+  <style>{{CSS_STYLES}}</style>
+</head>
+<body>
+<script type="application/json" id="payload-data">{{PAYLOAD_JSON}}</script>
+
+<header class="hitl-header">
+  <div>
+    <h1 class="hitl-brand">💼 link-proxy · Action Review</h1>
+    <p class="hitl-subtitle">{{ACTION}} — revue JSON, rien à rédiger</p>
+    <div id="action-badge">
+      <span class="status-badge">⚡ {{ACTION}}</span>
+    </div>
+  </div>
+  <div class="hitl-actions">
+    <button class="hitl-button hitl-reject" onclick="submitForm('rejected')">✕ Reject</button>
+    <button class="hitl-button hitl-approve" onclick="submitForm('approved')">✓ Approve &amp; Execute</button>
+  </div>
+</header>
+
+<main class="hitl-container">
+  <!-- ===== 1. Target summary (identity at a glance) ===== -->
+  <section class="hitl-card">
+    <h2>🎯 Cible <span class="field-label">champs d'identité, lecture seule si verrouillés</span></h2>
+    <div class="hitl-card-body">
+      <div id="target-summary"><p class="field-label">—</p></div>
+    </div>
+  </section>
+
+  <!-- ===== 2. Full-width raw JSON (always visible) ===== -->
+  <section class="hitl-card">
+    <h2>🔧 JSON brut <span class="field-label">pleine largeur, éditable</span></h2>
+    <div class="hitl-card-body">
+      <textarea class="hitl-input hitl-mono" id="raw-json-payload" rows="16" spellcheck="false"></textarea>
+    </div>
+  </section>
+</main>
+
+<footer class="hitl-footer">
+  <textarea class="hitl-input" id="comment" placeholder="Commentaire reviewer (optionnel, loggé dans l'autosave)" rows="2" style="flex:1"></textarea>
+  <button class="hitl-button hitl-reject" onclick="submitForm('rejected')">✕ Reject</button>
+  <button class="hitl-button hitl-approve" onclick="submitForm('approved')">✓ Approve &amp; Execute</button>
+</footer>
+
+<script>
+var ORIGINAL = null;
+var payload = {};
+var lockedFields = {{LOCKED_FIELDS_JSON}};
+
+try {
+  payload = JSON.parse(document.getElementById('payload-data').textContent);
+  ORIGINAL = JSON.parse(JSON.stringify(payload));
+} catch(e) { payload = {}; ORIGINAL = {}; }
+
+// Target summary: surface identity fields big, flag locked ones
+(function renderTarget() {
+  var box = document.getElementById('target-summary');
+  var keys = Object.keys(payload);
+  if (!keys.length) { box.innerHTML = '<p class="field-label">(payload vide)</p>'; return; }
+  var html = '<div class="target-grid">';
+  keys.forEach(function(key) {
+    var v = payload[key];
+    var isLocked = lockedFields.indexOf(key) !== -1;
+    var isTarget = /urn|post_urn|comment_urn|parent_comment_urn|reaction|visibility|method|endpoint/i.test(key);
+    var shown = (typeof v === 'object') ? JSON.stringify(v) : String(v === null || v === undefined ? '' : v);
+    if (shown.length > 220) shown = shown.substring(0, 220) + '…';
+    html += '<div class="target-row' + (isTarget ? ' target-hl' : '') + '">' +
+      '<span class="target-key">' + escapeHtml(key) +
+      (isLocked ? ' 🔒' : '') + '</span>' +
+      '<span class="target-val">' + escapeHtml(shown) + '</span></div>';
+  });
+  box.innerHTML = html + '</div>';
+})();
+
+var rawEl = document.getElementById('raw-json-payload');
+rawEl.value = JSON.stringify(payload, null, 2);
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function submitForm(decision) {
+  var finalPayload;
+  try { finalPayload = JSON.parse(rawEl.value); }
+  catch(e) { finalPayload = JSON.parse(JSON.stringify(payload)); }
+  lockedFields.forEach(function(k) { if (ORIGINAL[k] !== undefined) finalPayload[k] = ORIGINAL[k]; });
+  var comment = document.getElementById('comment').value.trim();
+  var edited = JSON.stringify(finalPayload) !== JSON.stringify(ORIGINAL);
+  var res = await fetch('/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ decision: decision, comment: comment, payload: JSON.stringify(finalPayload) })
+  });
+  if (res.ok) {
+    document.body.innerHTML = '<div class="hitl-done"><h2>' +
+      (decision === 'approved' ? '✅ ACTION APPROVED' : '❌ REJECTED') +
+      '</h2><p>You can close this browser tab.</p></div>';
+    setTimeout(function() { window.close(); }, 1200);
+  }
+}
+</script>
+</body>
+</html>

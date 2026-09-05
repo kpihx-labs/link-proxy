@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>link-proxy — Authentication & Credentials</title>
+  <style>{{CSS_STYLES}}</style>
+</head>
+<body>
+<script type="application/json" id="payload-data">{{PAYLOAD_JSON}}</script>
+
+<header class="hitl-header">
+  <div>
+    <h1 class="hitl-brand">💼 link-proxy · Authentication</h1>
+    <p class="hitl-subtitle">admin auth login</p>
+  </div>
+  <div class="hitl-actions">
+    <button class="hitl-button hitl-reject" onclick="submitForm('rejected')">✕ Cancel</button>
+    <button class="hitl-button hitl-approve" onclick="submitForm('approved')">✓ Save & Authenticate</button>
+  </div>
+</header>
+
+<main class="hitl-container">
+  <!-- Current Account Status Banner -->
+  <section class="hitl-card" id="status-card">
+    <h2>🔑 Account Status <span class="field-label">current configuration</span></h2>
+    <div class="hitl-card-body">
+      <div class="status-badge" id="status-badge">
+        <span>Checking configuration...</span>
+      </div>
+      <div class="type-info" style="margin-top:10px" id="status-details"></div>
+    </div>
+  </section>
+
+  <!-- Main Credentials Form -->
+  <section class="hitl-card">
+    <h2>💼 Developer App Credentials & Mode <span class="field-label">LinkedIn OAuth 2.0</span></h2>
+    <div class="hitl-card-body">
+      <div class="form-grid">
+        
+        <!-- Auth Mode Selector -->
+        <div class="form-group full">
+          <label>Authentication Mode</label>
+          <div style="display:flex;gap:18px;align-items:center;margin-top:4px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text);">
+              <input type="radio" name="auth_mode" value="oauth2" checked onchange="onModeChange()"> OAuth 2.0 Browser Consent (Standard)
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text);">
+              <input type="radio" name="auth_mode" value="direct_token" onchange="onModeChange()"> Direct Access Token (Headless / Token Paste)
+            </label>
+          </div>
+          <div class="hint" id="mode-hint">OAuth 2.0 flow: opens browser to approve requested scopes. Token valid for 60 days.</div>
+        </div>
+
+        <!-- Mode Info Banner -->
+        <div class="type-info full" id="info-banner">
+          <strong>OAuth 2.0 Scopes Requested</strong><br>
+          <code>openid profile email w_member_social</code><br>
+          <em>Grants access to query profile details (sub URN, name, email) and publish/delete feed posts and comments.</em>
+        </div>
+
+        <!-- Client ID -->
+        <div class="form-group full" id="client-id-group">
+          <label>LinkedIn Client ID</label>
+          <input type="text" id="client_id" placeholder="e.g. 86abcdef123456" autocomplete="off">
+          <div class="hint">Application Client ID from LinkedIn Developer Console.</div>
+        </div>
+
+        <!-- Client Secret -->
+        <div class="form-group full" id="client-secret-group">
+          <label>LinkedIn Client Secret</label>
+          <input type="password" id="client_secret" placeholder="e.g. Wpl...secret...xyz" autocomplete="off">
+          <div class="hint">Application Client Secret key.</div>
+        </div>
+
+        <!-- Direct Access Token (Mode B) -->
+        <div class="form-group full" id="direct-token-group" style="display:none">
+          <label>Direct Access Token (Bearer)</label>
+          <input type="password" id="access_token" placeholder="Paste pre-generated 60-day Bearer access token">
+          <div class="hint">Use when running headless or pasting a token generated externally.</div>
+        </div>
+
+        <!-- Callback Port -->
+        <div class="form-group" id="port-group">
+          <label>OAuth Callback Port</label>
+          <input type="number" id="redirect_port" value="38421" placeholder="38421">
+          <div class="hint">Local loopback port for <code>http://localhost:PORT/callback</code>.</div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="hitl-footer">
+  <input class="hitl-input" id="comment" placeholder="Reviewer comment (optional notes for autosave log)" style="flex:1">
+</footer>
+
+<script>
+var ORIGINAL = null;
+var payload = {};
+
+try {
+  payload = JSON.parse(document.getElementById('payload-data').textContent);
+  ORIGINAL = JSON.parse(JSON.stringify(payload));
+} catch(e) {
+  payload = {};
+  ORIGINAL = {};
+}
+
+// Populate fields from payload
+document.getElementById('client_id').value = payload.client_id || '';
+document.getElementById('client_secret').value = payload.client_secret || '';
+document.getElementById('access_token').value = payload.access_token || '';
+if (payload.redirect_port) {
+  document.getElementById('redirect_port').value = payload.redirect_port;
+}
+
+// Update Status Card
+var statusBadge = document.getElementById('status-badge');
+var statusDetails = document.getElementById('status-details');
+if (payload.access_token) {
+  statusBadge.innerHTML = '<span>✅ Token Configured</span>';
+  statusDetails.innerHTML = 'Member identity: <code>' + (payload.member_id || 'Configured') + '</code>';
+} else {
+  statusBadge.innerHTML = '<span style="color:var(--muted)">⚠️ Unconfigured / Missing Credentials</span>';
+  statusDetails.innerHTML = 'Enter your LinkedIn Application Client ID and Secret below to pair.';
+}
+
+function onModeChange() {
+  var mode = document.querySelector('input[name="auth_mode"]:checked').value;
+  var tokenGroup = document.getElementById('direct-token-group');
+  var portGroup = document.getElementById('port-group');
+  var hint = document.getElementById('mode-hint');
+
+  if (mode === 'direct_token') {
+    tokenGroup.style.display = 'flex';
+    portGroup.style.display = 'none';
+    hint.textContent = 'Direct token mode: paste pre-generated access token. No browser authorization required.';
+  } else {
+    tokenGroup.style.display = 'none';
+    portGroup.style.display = 'flex';
+    hint.textContent = 'OAuth 2.0 flow: opens browser to approve requested scopes. Token valid for 60 days.';
+  }
+}
+
+async function submitForm(decision) {
+  var mode = document.querySelector('input[name="auth_mode"]:checked').value;
+  var clientId = document.getElementById('client_id').value.trim();
+  var clientSecret = document.getElementById('client_secret').value.trim();
+  var accessToken = document.getElementById('access_token').value.trim();
+  var redirectPort = parseInt(document.getElementById('redirect_port').value, 10) || 38421;
+  var comment = document.getElementById('comment').value.trim();
+
+  var updatedPayload = {
+    client_id: clientId,
+    client_secret: clientSecret,
+    auth_mode: mode,
+    access_token: accessToken,
+    redirect_port: redirectPort
+  };
+
+  var edited = JSON.stringify(updatedPayload) !== JSON.stringify(ORIGINAL);
+
+  var res = await fetch('/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      decision: decision,
+      comment: comment,
+      payload: JSON.stringify(updatedPayload)
+    })
+  });
+
+  if (res.ok) {
+    document.body.innerHTML = '<div class="hitl-done"><h2>' +
+      (decision === 'approved' ? '✅ AUTHENTICATION INITIALIZED' : '❌ CANCELLED') +
+      '</h2><p>You can close this browser tab.</p></div>';
+    setTimeout(function() { window.close(); }, 1200);
+  }
+}
+</script>
+</body>
+</html>

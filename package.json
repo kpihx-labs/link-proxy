@@ -1,0 +1,33 @@
+{
+  "name": "link-proxy",
+  "version": "0.1.6",
+  "description": "Non-MCP CLI proxy for LinkedIn — 16 flat RPC actions over LinkedIn REST v2 API",
+  "main": "src/link_proxy/index.ts",
+  "bin": {
+    "link-proxy": "bin/link-proxy.mjs"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "smoke": "bun test tests/smoke.test.ts"
+  },
+  "keywords": [
+    "linkedin",
+    "cli",
+    "proxy",
+    "rpc",
+    "automation"
+  ],
+  "author": "Ivann KAMDEM <kapoivha@gmail.com>",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "commander": "^13.1.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "@types/node": "^22.13.4",
+    "typescript": "^5.7.3"
+  }
+}
