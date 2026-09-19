@@ -57,9 +57,9 @@ build: ## Build npm package tarball
 
 publish: build ## Publish npm package
 	@npm config set //registry.npmjs.org/:_authToken "$$NPM_TOKEN"; \
-	status=0; npm publish --access public || status=$$?; \
+	rc=0; npm publish --access public || rc=$$?; \
 	npm config delete //registry.npmjs.org/:_authToken; \
-	exit $$status
+	exit $$rc
 
 # ─── Git ───
 
