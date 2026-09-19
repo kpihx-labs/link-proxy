@@ -1,6 +1,6 @@
 {
   "name": "link-proxy",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Non-MCP CLI proxy for LinkedIn — 16 flat RPC actions over LinkedIn REST v2 API",
   "main": "src/link_proxy/index.ts",
   "bin": {

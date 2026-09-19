@@ -2,7 +2,7 @@
 
 > **Status:** 🟢 **LIVE — 10 active actions, 6 disabled (code kept).** This document is the authoritative architecture
 > contract for `link-proxy`, the non-MCP LinkedIn CLI built on the exact ADN of `whats-proxy`
-> (`$HOME/KpihX-Labs/Proxies/whats-proxy/`) and `tick-proxy` (`$HOME/KpihX-Labs/Proxies/tick-proxy/`).
+> (`$HOME/Labs/KpihX-Labs/Proxies/whats-proxy/`) and `tick-proxy` (`$HOME/Labs/KpihX-Labs/Proxies/tick-proxy/`).
 
 ---
 
@@ -20,7 +20,7 @@ follows **exactly** the `whats-proxy` / `tick-proxy` model, adapted for LinkedIn
 - **TypeScript + Zod + Bun toolchain + Node.js runtime** — Bun owns install/test/build, Node.js runs CLI
 - **NO Docker** — explicitly excluded (same as `whats-proxy` / `tick-proxy`)
 
-**Location:** `$HOME/KpihX-Labs/Proxies/link-proxy/` — sibling of `whats-proxy/` and `mail-proxy/`.
+**Location:** `$HOME/Labs/KpihX-Labs/Proxies/link-proxy/` — sibling of `whats-proxy/` and `mail-proxy/`.
 
 ---
 

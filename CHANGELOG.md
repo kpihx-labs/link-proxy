@@ -5,6 +5,14 @@ All notable changes to `link-proxy` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2026-09-19
+
+### Changed
+- Path migration to the post-reorg layout (`$HOME/Labs/KpihX-Labs/Proxies/link-proxy`) in
+  `CONTRACT.md`, and added `AGENTS.md` project context.
+- `AGENTS.md` status aligned with reality: LIVE with 10 active actions and 6 disabled
+  (code kept), version tracking `package.json`.
+
 ## [0.1.6] - 2026-09-05
 
 ### Removed (disabled, code kept)
